@@ -6,7 +6,7 @@ import csv
 from typing import List, Any, Callable
 from functools import wraps
 
-CACHE_DIR = ".cache"
+CACHE_DIR = ".cache/util"
 
 
 def ensure_cache_dir(func_name: str) -> bytes:
@@ -55,13 +55,6 @@ def cache_result(func: Callable):
     return wrapper
 
 
-@cache_result
-def read_file_content(file_path: str) -> str:
-    logging.info(f"Reading content from {file_path}")
-    with open(file_path, "r") as f:
-        return f.read()
-
-
 def write_to_file(file_path: str, content: str) -> None:
     logging.info(f"Writing content to {file_path}")
     with open(file_path, "w") as f:
@@ -92,9 +85,26 @@ def prefix_filter(input_file: str, prefix: str) -> List[int]:
         if not line:  # End of file
             break
         if line.startswith(prefix):
-            logging.info(f"Found {prefix} at line {line_number}")
+            logging.debug(f"Found {prefix} at line {line_number}")
             line_numbers.append(line_number)
         line_number += 1
 
     file.close()
     return line_numbers
+
+
+def skip_lines(input_file: str, n: int):
+    """
+    Skip n lines of a file buffer that is read line by line.
+
+    Args:
+    file: A file object
+    n: Number of lines to skip
+
+    Returns:
+    The file object after skipping n lines
+    """
+    file = open(input_file, "r")
+    for _ in range(n):
+        next(file, None)
+    return file

@@ -1,26 +1,60 @@
 import logging
-from util import cache_result
-from typing import List
-from util import prefix_filter
+from typing import List, Any, Callable
+from functools import wraps
+import util
+import pickle
+import hashlib
+import os
 
 SQL_FILE = "./tables.sql"
 
+CACHE_DIR = ".cache/create_table"
 
-def skip_lines(input_file: str, n: int):
-    """
-    Skip n lines of a file buffer that is read line by line.
 
-    Args:
-    file: A file object
-    n: Number of lines to skip
+def ensure_cache_dir(func_name: str) -> bytes:
+    func_cache_dir = os.path.join(CACHE_DIR, func_name)
+    if not os.path.exists(func_cache_dir):
+        os.makedirs(func_cache_dir)
 
-    Returns:
-    The file object after skipping n lines
-    """
-    file = open(input_file, "r")
-    for _ in range(n):
-        next(file, None)
-    return file
+    return func_cache_dir.encode()
+
+
+def serialize_args(*args, **kwargs) -> str:
+    serialized = f"{str(args)}:{str(kwargs)}"
+    return hashlib.md5(serialized.encode()).hexdigest()
+
+
+def pickle_key(arg: Any) -> bytes:
+    return pickle.dumps(arg)
+
+
+def cache_result(func: Callable):
+    @wraps(func)
+    def wrapper(*args):
+        func_cache_dir: str = ensure_cache_dir(func.__name__)
+        cache_key = hashlib.md5(pickle_key(args)).hexdigest().encode()
+        cache_file: str = os.path.join(func_cache_dir, cache_key)
+
+        if os.path.exists(cache_file):
+            f = open(cache_file, "rb")
+            logging.debug(f"Cache hit for {func.__name__}")
+            content = f.read()
+            f.close()
+            p = pickle.loads(content)
+            return p
+        else:
+            logging.info(f"Cache miss for {func.__name__}")
+
+        result = func(*args)
+
+        f = open(cache_file, "wb")
+        pickle.dump(result, f)
+        f.close()
+        logging.info(f"Cached result for {func.__name__}")
+
+        return result
+
+    return wrapper
 
 
 @cache_result
@@ -41,7 +75,7 @@ def read_lines_range(input_file: str, start: int, end: int) -> List[str]:
     lines = []
     with open(input_file, "r") as file:
         # Skip to the start line
-        file = skip_lines(input_file, start - 1)
+        file = util.skip_lines(input_file, start - 1)
         diff = end - start + 1
 
         # Read lines within the range
@@ -103,7 +137,7 @@ def extract_create_table_statements(
 @cache_result
 def create_linenums(input_file: str) -> List[int]:
     logging.info("Finding CREATE TABLE statements")
-    statements: List[int] = prefix_filter(input_file, "CREATE TABLE")
+    statements: List[int] = util.prefix_filter(input_file, "CREATE TABLE")
 
     logging.info(f"Found {len(statements)} CREATE TABLE statements")
     return statements
