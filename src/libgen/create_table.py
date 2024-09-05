@@ -121,7 +121,7 @@ def find_sql_termination(input_file: str, start_offset: int) -> int:
 @cache_result
 def extract_create_table_statements(
     input_file: str, line_numbers: List[int]
-) -> List[str]:
+) -> List[List[str]]:
     logging.info(f"Extracting CREATE TABLE statements from {input_file}")
 
     create_table_statements = []
@@ -132,6 +132,22 @@ def extract_create_table_statements(
 
     logging.info(f"Extracted {len(create_table_statements)} CREATE TABLE statements")
     return create_table_statements
+
+
+@cache_result
+def script_from_table(input_file: str, table_name: str) -> List[str]:
+    """
+    Get the create table statement of table_name from the input file.
+    """
+    line_numbers = create_linenums(input_file)
+    create_table_statements: List[List[str]] = extract_create_table_statements(
+        input_file, line_numbers
+    )
+    ss = scripts_ss(create_table_statements)
+
+    for s in ss:
+        if s.startswith(f"CREATE TABLE `{table_name}`"):
+            return s
 
 
 @cache_result
@@ -194,29 +210,39 @@ def get_tables(input_file: str) -> List[str]:
 
 
 @cache_result
-def scripts(input_file: str) -> List[str]:
+def scripts(input_file: str) -> List[List[str]]:
     """
     Get the create table statements from the input file.
     """
     logging.info(f"Getting create table statements from {input_file}")
     line_numbers = create_linenums(input_file)
-    create_table_statements = extract_create_table_statements(input_file, line_numbers)
+    create_table_statements: List[List[str]] = extract_create_table_statements(
+        input_file, line_numbers
+    )
     return create_table_statements
 
 
 @cache_result
-def script_format(create_table_statements: List[str]) -> str:
+def scripts_ss(create_table_statements: List[List[str]]) -> List[str]:
     """
     Format create table statements for writing to a file.
     """
     logging.info("Formatting create table statements")
     formatted_statements = []
     for stmt in create_table_statements:
-        for line in stmt:
-            formatted_statements.append(line)
-        formatted_statements.append("\n")
+        formatted_statements.append("".join(stmt))
 
-    return "\n".join(formatted_statements)
+    return formatted_statements
+
+
+@cache_result
+def scripts_format(create_table_statements: List[List[str]]) -> str:
+    """
+    Format create table statements for writing to a file.
+    """
+    ss = scripts_ss(create_table_statements)
+
+    return "\n".join(ss)
 
 
 def update(input_file: str):
@@ -224,10 +250,10 @@ def update(input_file: str):
     Write create table statements to a table.sql file.
     """
     logging.info(f"Updating {SQL_FILE}")
-    create_table_statements: List[str] = scripts(input_file)
+    create_table_statements: List[List[str]] = scripts(input_file)
     tables = open(SQL_FILE, "w")
 
-    tables.write(script_format(create_table_statements))
+    tables.write(scripts_format(create_table_statements))
 
     tables.close()
 

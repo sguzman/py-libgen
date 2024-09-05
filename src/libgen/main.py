@@ -20,10 +20,7 @@ def main():
     create_table.update(input_file)
     tables = create_table.get_tables(input_file)
     for table in tables:
-        insert_statements = insert_statement.find_insert_statements(input_file, table)
-        logging.info(
-            f"Found {len(insert_statements)} INSERT statements for table {table}"
-        )
+        insert_statement.update(input_file, table)
 
     logging.info("Processing complete")
 

@@ -57,6 +57,19 @@ def cache_result(func: Callable):
 
 
 @cache_result
+def columns_from_str(ss: str) -> List[str]:
+    columns = []
+    for token in ss.split():
+        if (
+            token.startswith("`")
+            and token.endswith("`")
+            and all(map(lambda s: s.isalnum() or s == "_", token[1:-1]))
+        ):
+            columns.append(token[1:-1])
+    return columns
+
+
+@cache_result
 def get_table_columns(input_file: str, table_name: str) -> List[str]:
     """
     Extract the column names for a given table from the CREATE TABLE statement in the input file.
@@ -70,29 +83,9 @@ def get_table_columns(input_file: str, table_name: str) -> List[str]:
     """
     logging.info(f"Extracting columns for table '{table_name}' from {input_file}")
 
-    create_table_lines = util.prefix_filter(input_file, f"CREATE TABLE `{table_name}`")
-
-    if not create_table_lines:
-        logging.warning(f"CREATE TABLE statement not found for table '{table_name}'")
-        return []
-
-    start_line = create_table_lines[0]
-    end_line = create_table.find_sql_termination(input_file, start_line)
-
-    create_table_statement = create_table.read_lines_range(
-        input_file, start_line, end_line
-    )
-
-    columns = []
-    for line in create_table_statement[1:]:  # Skip the first line (CREATE TABLE)
-        line = line.strip()
-        if line.startswith("`"):
-            column_name = line.split("`")[1]
-            columns.append(column_name)
-        elif line.startswith(")"):  # End of column definitions
-            break
-
-    logging.info(f"Extracted {len(columns)} columns for table '{table_name}'")
+    ss = create_table.script_from_table(input_file, table_name)
+    columns = columns_from_str(ss)
+    logging.info(f"{table_name}: {columns}")
     return columns
 
 
@@ -116,3 +109,11 @@ def find_insert_statements(input_file: str, table_name: str) -> List[str]:
         f"Found {len(insert_statements)} INSERT statements for table '{table_name}'"
     )
     return insert_statements
+
+
+def update(input_file: str, table_name: str):
+    """
+    Update the insert statements for a specific table in the input file.
+    """
+    _insert_statements = find_insert_statements(input_file, table_name)
+    _columns = get_table_columns(input_file, table_name)
