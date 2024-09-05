@@ -8,3 +8,8 @@ wheels/
 
 # venv
 .venv
+resources/
+*.lock
+*.db
+*.csv
+*.sql
