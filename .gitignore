@@ -14,3 +14,5 @@ resources/
 *.csv
 *.sql
 *.rar
+cache/
+.cache/
