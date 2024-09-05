@@ -2,14 +2,46 @@ import re
 import csv
 import logging
 import os
+import shelve
+import hashlib
 from typing import List, Dict, Any
 from sqlglot import exp, parse_one
+from functools import lru_cache
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+CACHE_FILE = "cache_db"
 
+
+def get_file_checksum(file_path: str) -> str:
+    logging.info(f"Calculating checksum for {file_path}")
+    with open(file_path, "rb") as f:
+        file_hash = hashlib.md5()
+        chunk = f.read(8192)
+        while chunk:
+            file_hash.update(chunk)
+            chunk = f.read(8192)
+    return file_hash.hexdigest()
+
+
+def cache_result(func):
+    def wrapper(*args, **kwargs):
+        with shelve.open(CACHE_FILE) as cache:
+            key = f"{func.__name__}:{str(args)}:{str(kwargs)}"
+            if key in cache:
+                logging.info(f"Cache hit for {func.__name__}")
+                return cache[key]
+            result = func(*args, **kwargs)
+            cache[key] = result
+            logging.info(f"Cached result for {func.__name__}")
+        return result
+
+    return wrapper
+
+
+@cache_result
 def read_file_content(file_path: str) -> str:
     logging.info(f"Reading content from {file_path}")
     with open(file_path, "r") as f:
@@ -29,6 +61,7 @@ def append_to_csv(file_path: str, rows: List[List[Any]]) -> None:
         writer.writerows(rows)
 
 
+@lru_cache(maxsize=None)
 def extract_column_names(create_statement: str) -> List[str]:
     logging.info("Extracting column names from CREATE TABLE statement")
     columns = re.findall(r"`(\w+)`", create_statement)
@@ -39,6 +72,7 @@ def extract_column_names(create_statement: str) -> List[str]:
     return unique_columns
 
 
+@cache_result
 def find_create_table_statements(content: str) -> List[str]:
     logging.info("Finding CREATE TABLE statements")
     statements = re.findall(r"CREATE TABLE.*?;", content, re.DOTALL | re.IGNORECASE)
@@ -46,6 +80,7 @@ def find_create_table_statements(content: str) -> List[str]:
     return statements
 
 
+@lru_cache(maxsize=None)
 def extract_table_name(statement: str) -> str:
     return re.search(r"CREATE TABLE `?(\w+)`?", statement, re.IGNORECASE).group(1)
 
@@ -56,6 +91,7 @@ def create_csv_with_headers(file_path: str, headers: List[str]) -> None:
         csv.writer(csvf).writerow(headers)
 
 
+@cache_result
 def process_create_statement(statement: str) -> Dict[str, List[str]]:
     table_name = extract_table_name(statement)
     logging.info(f"Processing table: {table_name}")
@@ -64,6 +100,7 @@ def process_create_statement(statement: str) -> Dict[str, List[str]]:
     return {table_name: columns}
 
 
+@cache_result
 def process_create_statements(input_file: str) -> Dict[str, List[str]]:
     logging.info(f"Processing CREATE TABLE statements from {input_file}")
     content = read_file_content(input_file)
@@ -79,6 +116,7 @@ def process_create_statements(input_file: str) -> Dict[str, List[str]]:
     return table_columns
 
 
+@lru_cache(maxsize=None)
 def parse_single_insert_value(value: str, prefix: str) -> List[Any]:
     single = f"{prefix.replace('`', '')} VALUES ({value.replace('(', '')});"
     stmt = parse_one(single)
@@ -86,6 +124,7 @@ def parse_single_insert_value(value: str, prefix: str) -> List[Any]:
     return [None if x == "" else x for x in data]
 
 
+@cache_result
 def parse_insert_values(string: str) -> List[List[Any]]:
     logging.info("Parsing INSERT statement values")
     prefix = string[: string.index("VALUES")]
@@ -102,6 +141,7 @@ def parse_insert_values(string: str) -> List[List[Any]]:
     return parsed_rows
 
 
+@cache_result
 def process_single_insert(statement: str, table_columns: Dict[str, List[str]]) -> None:
     table_name = statement[: statement.index("VALUES")].split()[2].replace("`", "")
     logging.info(f"Processing INSERT for table: {table_name}")
@@ -115,6 +155,7 @@ def process_single_insert(statement: str, table_columns: Dict[str, List[str]]) -
     append_to_csv(csv_file, rows)
 
 
+@cache_result
 def process_insert_statements(
     input_file: str, table_columns: Dict[str, List[str]]
 ) -> None:
@@ -144,8 +185,18 @@ def main():
 
     logging.info(f"Starting to process {input_file}")
 
-    table_columns = process_create_statements(input_file)
-    process_insert_statements(input_file, table_columns)
+    file_checksum = get_file_checksum(input_file)
+
+    with shelve.open(CACHE_FILE) as cache:
+        if cache.get("input_file_checksum") == file_checksum:
+            logging.info("Input file unchanged, using cached results")
+            table_columns = cache.get("table_columns", {})
+        else:
+            logging.info("Input file changed or not cached, processing from scratch")
+            table_columns = process_create_statements(input_file)
+            process_insert_statements(input_file, table_columns)
+            cache["input_file_checksum"] = file_checksum
+            cache["table_columns"] = table_columns
 
     logging.info("Processing complete")
 
