@@ -56,7 +56,7 @@ def parse_insert_values(string: str) -> list[list[any]]:
             data = [None if x == '' else x for x in data]
             parsed_rows.append(data)
         except Exception as e:
-            logging.warn(f"Error parsing INSERT statement: {e}")
+            logging.debug(f"Error parsing INSERT statement: {e}")
     return parsed_rows
 
 
@@ -76,8 +76,8 @@ def process_insert_statements(input_file, table_columns):
                 with open(csv_file, 'a', newline='') as csvf:
                     writer = csv.writer(csvf)
                     rows = parse_insert_values(statement)
+                    logging.info(f'Writing {len(rows)} rows to {csv_file}')
                     for row in rows:
-                        logging.info(f"Writing row to {csv_file}: {row}")
                         writer.writerow(row)
 
             except Exception as e:
