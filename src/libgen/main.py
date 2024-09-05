@@ -2,8 +2,6 @@ import sys
 import re
 import csv
 import logging
-import os
-from multiprocessing import Pool
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -40,60 +38,45 @@ def process_create_statements(input_file):
     logging.info(f"Added {len(create_table_statements)} CREATE TABLE statement(s) to {tables_file}")
     return table_columns
 
-def process_insert_chunk(chunk, table_columns):
-    insert_statements = re.findall(r'INSERT INTO.*?VALUES\s*(\(.*?\));', chunk, re.DOTALL | re.IGNORECASE)
-    results = []
-    
-    for statement in insert_statements:
-        match = re.search(r'INSERT INTO `?(\w+)`?', statement, re.IGNORECASE)
-        if not match:
-            logging.warning(f"Could not extract table name from INSERT statement: {statement[:100]}...")
-            continue
+def process_insert_statements(input_file, table_columns):
+    with open(input_file, 'r') as f:
+        content = f.read()
+        insert_statements = re.findall(r'INSERT INTO.*?VALUES\s*(\(.*?\)(,\s*\(.*?\))*);', content, re.DOTALL | re.IGNORECASE)
         
-        table_name = match.group(1)
-        if table_name not in table_columns:
-            logging.warning(f"Skipping INSERT for unknown table: {table_name}")
-            continue
-        
-        values = re.findall(r'\((.*?)\)', statement)
-        for value_set in values:
-            row = [v.strip().strip("'") for v in value_set.split(',')]
-            if len(row) != len(table_columns[table_name]):
-                logging.warning(f"Mismatch in column count for table {table_name}. Expected {len(table_columns[table_name])}, got {len(row)}")
+        for statement in insert_statements:
+            match = re.search(r'INSERT INTO `?(\w+)`?', statement, re.IGNORECASE)
+            if not match:
+                logging.warning(f"Could not extract table name from INSERT statement: {statement[:100]}...")
                 continue
-            results.append((table_name, row))
-    
-    return results
-
-def write_insert_results(results, table_columns):
-    for table_name, row in results:
-        csv_file = f"{table_name}.csv"
-        with open(csv_file, 'a', newline='') as csvf:
-            csv.writer(csvf).writerow(row)
+            
+            table_name = match.group(1)
+            if table_name not in table_columns:
+                logging.warning(f"Skipping INSERT for unknown table: {table_name}")
+                continue
+            
+            values = re.findall(r'\((.*?)\)', statement)
+            csv_file = f"{table_name}.csv"
+            
+            with open(csv_file, 'a', newline='') as csvf:
+                writer = csv.writer(csvf)
+                for value_set in values:
+                    row = re.findall(r'\'(?:[^\'\\]|\\.)*\'|[^,]+', value_set)
+                    row = [v.strip().strip("'") for v in row]
+                    
+                    if len(row) != len(table_columns[table_name]):
+                        logging.warning(f"Mismatch in column count for table {table_name}. Expected {len(table_columns[table_name])}, got {len(row)}")
+                        continue
+                    
+                    writer.writerow(row)
+        
+        logging.info(f"Processed {len(insert_statements)} INSERT statement(s)")
 
 def main(input_file):
     # First pass: Process CREATE TABLE statements
     table_columns = process_create_statements(input_file)
     
-    # Second pass: Process INSERT statements in parallel
-    chunk_size = 10 * 1024 * 1024  # 10 MB chunks
-    
-    with open(input_file, 'r') as f:
-        with Pool() as pool:
-            def read_chunk():
-                chunk = f.read(chunk_size)
-                if not chunk:
-                    return ''
-                # Read until the end of the last complete INSERT statement
-                while not chunk.endswith(';\n') and not f.tell() == os.fstat(f.fileno()).st_size:
-                    chunk += f.readline()
-                return chunk
-
-            chunks = iter(read_chunk, '')
-            results = pool.starmap(process_insert_chunk, [(chunk, table_columns) for chunk in chunks])
-            
-            for chunk_results in results:
-                write_insert_results(chunk_results, table_columns)
+    # Second pass: Process INSERT statements
+    process_insert_statements(input_file, table_columns)
     
     logging.info("Processing complete")
 
