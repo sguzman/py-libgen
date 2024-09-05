@@ -1,6 +1,7 @@
 import logging
 import os
 import create_table
+import insert_statement
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -18,7 +19,11 @@ def main():
 
     create_table.update(input_file)
     tables = create_table.get_tables(input_file)
-    logging.info(f"Found {tables} tables")
+    for table in tables:
+        insert_statements = insert_statement.find_insert_statements(input_file, table)
+        logging.info(
+            f"Found {len(insert_statements)} INSERT statements for table {table}"
+        )
 
     logging.info("Processing complete")
 
