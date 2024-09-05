@@ -41,12 +41,14 @@ def process_create_statements(input_file):
 def process_insert_statements(input_file, table_columns):
     with open(input_file, 'r') as f:
         content = f.read()
-        insert_statements = re.findall(r'INSERT INTO.*?VALUES\s*(\(.*?\)(,\s*\(.*?\))*);', content, re.DOTALL | re.IGNORECASE)
+        insert_statements = re.findall(r'(INSERT INTO.*?VALUES\s*(\(.*?\)(,\s*\(.*?\))*));', content, re.DOTALL | re.IGNORECASE)
         
-        for statement in insert_statements:
-            match = re.search(r'INSERT INTO `?(\w+)`?', statement, re.IGNORECASE)
+        for match in insert_statements:
+            full_statement = match[0]  # The full INSERT statement is always the first element
+            
+            match = re.search(r'INSERT INTO `?(\w+)`?', full_statement, re.IGNORECASE)
             if not match:
-                logging.warning(f"Could not extract table name from INSERT statement: {statement[:100]}...")
+                logging.warning(f"Could not extract table name from INSERT statement: {full_statement[:100]}...")
                 continue
             
             table_name = match.group(1)
@@ -54,7 +56,7 @@ def process_insert_statements(input_file, table_columns):
                 logging.warning(f"Skipping INSERT for unknown table: {table_name}")
                 continue
             
-            values = re.findall(r'\((.*?)\)', statement)
+            values = re.findall(r'\((.*?)\)', full_statement)
             csv_file = f"{table_name}.csv"
             
             with open(csv_file, 'a', newline='') as csvf:
