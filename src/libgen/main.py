@@ -2,6 +2,7 @@ import re
 import csv
 import logging
 import os
+from typing import List, Dict, Any
 from sqlglot import exp, parse_one
 
 logging.basicConfig(
@@ -9,116 +10,132 @@ logging.basicConfig(
 )
 
 
-def extract_column_names(create_statement):
+def read_file_content(file_path: str) -> str:
+    logging.info(f"Reading content from {file_path}")
+    with open(file_path, "r") as f:
+        return f.read()
+
+
+def write_to_file(file_path: str, content: str) -> None:
+    logging.info(f"Writing content to {file_path}")
+    with open(file_path, "w") as f:
+        f.write(content)
+
+
+def append_to_csv(file_path: str, rows: List[List[Any]]) -> None:
+    logging.info(f"Appending {len(rows)} rows to {file_path}")
+    with open(file_path, "a", newline="") as csvf:
+        writer = csv.writer(csvf)
+        writer.writerows(rows)
+
+
+def extract_column_names(create_statement: str) -> List[str]:
     logging.info("Extracting column names from CREATE TABLE statement")
     columns = re.findall(r"`(\w+)`", create_statement)
-    # Remove the first match (table name) and remove duplicates while preserving order
-    unique_columns = []
-    seen = set()
-    for col in columns[1:]:
-        if col not in seen:
-            seen.add(col)
-            unique_columns.append(col)
+    unique_columns = list(
+        dict.fromkeys(columns[1:])
+    )  # Remove duplicates while preserving order
     logging.info(f"Extracted columns: {unique_columns}")
     return unique_columns
 
 
-def process_create_statements(input_file):
+def find_create_table_statements(content: str) -> List[str]:
+    logging.info("Finding CREATE TABLE statements")
+    statements = re.findall(r"CREATE TABLE.*?;", content, re.DOTALL | re.IGNORECASE)
+    logging.info(f"Found {len(statements)} CREATE TABLE statements")
+    return statements
+
+
+def extract_table_name(statement: str) -> str:
+    return re.search(r"CREATE TABLE `?(\w+)`?", statement, re.IGNORECASE).group(1)
+
+
+def create_csv_with_headers(file_path: str, headers: List[str]) -> None:
+    logging.info(f"Creating new CSV file with headers: {file_path}")
+    with open(file_path, "w", newline="") as csvf:
+        csv.writer(csvf).writerow(headers)
+
+
+def process_create_statement(statement: str) -> Dict[str, List[str]]:
+    table_name = extract_table_name(statement)
+    logging.info(f"Processing table: {table_name}")
+    columns = extract_column_names(statement)
+    create_csv_with_headers(f"{table_name}.csv", columns)
+    return {table_name: columns}
+
+
+def process_create_statements(input_file: str) -> Dict[str, List[str]]:
     logging.info(f"Processing CREATE TABLE statements from {input_file}")
-    tables_file = "tables.sql"
+    content = read_file_content(input_file)
+    create_table_statements = find_create_table_statements(content)
+
+    write_to_file("tables.sql", "\n\n".join(create_table_statements) + "\n\n")
+
     table_columns = {}
+    for statement in create_table_statements:
+        table_columns.update(process_create_statement(statement))
 
-    with open(input_file, "r") as f, open(tables_file, "w") as tf:
-        content = f.read()
-        create_table_statements = re.findall(
-            r"CREATE TABLE.*?;", content, re.DOTALL | re.IGNORECASE
-        )
-        logging.info(f"Found {len(create_table_statements)} CREATE TABLE statements")
-
-        for statement in create_table_statements:
-            tf.write(statement + "\n\n")
-            table_name = re.search(
-                r"CREATE TABLE `?(\w+)`?", statement, re.IGNORECASE
-            ).group(1)
-            logging.info(f"Processing table: {table_name}")
-            columns = extract_column_names(statement)
-            table_columns[table_name] = columns
-
-            csv_file = f"{table_name}.csv"
-            with open(csv_file, "w", newline="") as csvf:
-                csv.writer(csvf).writerow(columns)
-            logging.info(f"Created new CSV file with headers: {csv_file}")
-
-    logging.info(
-        f"Added {len(create_table_statements)} CREATE TABLE statement(s) to {tables_file}"
-    )
+    logging.info(f"Processed {len(create_table_statements)} CREATE TABLE statement(s)")
     return table_columns
 
 
-def parse_insert_values(string: str) -> list[list[any]]:
+def parse_single_insert_value(value: str, prefix: str) -> List[Any]:
+    single = f"{prefix.replace('`', '')} VALUES ({value.replace('(', '')});"
+    stmt = parse_one(single)
+    data = [x.this for x in stmt.find(exp.Values).find_all(exp.Literal)]
+    return [None if x == "" else x for x in data]
+
+
+def parse_insert_values(string: str) -> List[List[Any]]:
     logging.info("Parsing INSERT statement values")
-    # Get prefix before VALUES
     prefix = string[: string.index("VALUES")]
-    # Extract the values part of the INSERT statement
     raw_values = string[string.index("VALUES") + 6 :].split("),(")
 
-    # Clean leading and trailing parentheses
     parsed_rows = []
     for value in raw_values:
         try:
-            single = (
-                prefix.replace("`", "")
-                + " VALUES "
-                + "("
-                + value.replace("(", "")
-                + ");"
-            )
-            stmt = parse_one(single)
-            data = [x.this for x in stmt.find(exp.Values).find_all(exp.Literal)]
-            data = [None if x == "" else x for x in data]
-            parsed_rows.append(data)
+            parsed_rows.append(parse_single_insert_value(value, prefix))
         except Exception as e:
             logging.debug(f"Error parsing INSERT statement: {e}")
+
     logging.info(f"Parsed {len(parsed_rows)} rows from INSERT statement")
     return parsed_rows
 
 
-def process_insert_statements(input_file, table_columns):
+def process_single_insert(statement: str, table_columns: Dict[str, List[str]]) -> None:
+    table_name = statement[: statement.index("VALUES")].split()[2].replace("`", "")
+    logging.info(f"Processing INSERT for table: {table_name}")
+
+    if table_name not in table_columns:
+        logging.warning(f"Skipping INSERT for unknown table: {table_name}")
+        return
+
+    csv_file = f"{table_name}.csv"
+    rows = parse_insert_values(statement)
+    append_to_csv(csv_file, rows)
+
+
+def process_insert_statements(
+    input_file: str, table_columns: Dict[str, List[str]]
+) -> None:
     logging.info(f"Processing INSERT statements from {input_file}")
-    with open(input_file, "r") as f:
-        # Read the entire file, split by newlines and filter out lines that don't start with INSERT
-        insert_statements = [
-            line for line in f.read().splitlines() if line.startswith("INSERT INTO")
-        ]
-        logging.info(f"Found {len(insert_statements)} INSERT statements")
+    content = read_file_content(input_file)
+    insert_statements = [
+        line for line in content.splitlines() if line.startswith("INSERT INTO")
+    ]
+    logging.info(f"Found {len(insert_statements)} INSERT statements")
 
-        for statement in insert_statements:
-            try:
-                table_name = (
-                    statement[: statement.index("VALUES")].split()[2].replace("`", "")
-                )
-                logging.info(f"Processing INSERT for table: {table_name}")
-                if table_name not in table_columns:
-                    logging.warning(f"Skipping INSERT for unknown table: {table_name}")
-                    continue
+    for statement in insert_statements:
+        try:
+            process_single_insert(statement, table_columns)
+        except Exception as e:
+            logging.error(f"Error processing INSERT statement: {e}")
+            logging.error(f"Problematic statement: {statement[:100]}...")
 
-                csv_file = f"{table_name}.csv"
-                with open(csv_file, "a", newline="") as csvf:
-                    writer = csv.writer(csvf)
-                    rows = parse_insert_values(statement)
-                    logging.info(f"Writing {len(rows)} rows to {csv_file}")
-                    for row in rows:
-                        writer.writerow(row)
-
-            except Exception as e:
-                logging.error(f"Error processing INSERT statement: {e}")
-                logging.error(f"Problematic statement: {statement[:100]}...")
-
-        logging.info(f"Processed {len(insert_statements)} INSERT statement(s)")
+    logging.info(f"Processed {len(insert_statements)} INSERT statement(s)")
 
 
 def main():
-    # Define the path to data.sql in the resources folder
     input_file = "./resources/data.sql"
 
     if not os.path.exists(input_file):
@@ -127,10 +144,7 @@ def main():
 
     logging.info(f"Starting to process {input_file}")
 
-    # First pass: Process CREATE TABLE statements
     table_columns = process_create_statements(input_file)
-
-    # Second pass: Process INSERT statements
     process_insert_statements(input_file, table_columns)
 
     logging.info("Processing complete")
