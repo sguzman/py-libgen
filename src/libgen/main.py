@@ -9,7 +9,14 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 
 def extract_column_names(create_statement):
     columns = re.findall(r'`(\w+)`', create_statement)
-    return columns[1:]  # Exclude the first match, which is the table name
+    # Remove the first match (table name) and remove duplicates while preserving order
+    unique_columns = []
+    seen = set()
+    for col in columns[1:]:
+        if col not in seen:
+            seen.add(col)
+            unique_columns.append(col)
+    return unique_columns
 
 def process_chunk(chunk, tables_file, csv_files, lock):
     create_table_statements = re.findall(r'CREATE TABLE.*?;', chunk, re.DOTALL | re.IGNORECASE)
