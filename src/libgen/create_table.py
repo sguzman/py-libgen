@@ -74,7 +74,7 @@ def read_lines_range(input_file: str, start: int, end: int) -> List[str]:
     with open(input_file, "r") as file:
         # Skip to the start line
         file = skip_lines(input_file, start - 1)
-        diff = end - start
+        diff = end - start + 1
 
         # Read lines within the range
         for _ in range(diff):
