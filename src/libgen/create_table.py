@@ -1,7 +1,7 @@
 import re
 import logging
 from util import cache_result, create_csv_with_headers
-from typing import List, Dict
+from typing import List, Dict, Optional
 from util import prefix_filter
 
 
@@ -139,3 +139,26 @@ def create_linenums(input_file: str) -> List[int]:
 
     logging.info(f"Found {len(statements)} CREATE TABLE statements")
     return statements
+
+
+def update(input_file: str) -> Optional[str]:
+    """
+    Write create table statements to a table.sql file.
+    """
+    logging.info(f"Updating {input_file}")
+
+    line_numbers: List[int] = create_linenums(input_file)
+    create_table_statements: List[str] = extract_create_table_statements(
+        input_file, line_numbers
+    )
+    tables = open("./tables.sql", "w")
+
+    for stmt in create_table_statements:
+        for line in stmt:
+            tables.write(line)
+            tables.write("\n")
+        tables.write("\n")
+
+    tables.close()
+
+    logging.info(f"Updated {input_file}")

@@ -1,7 +1,6 @@
 import logging
 import os
-from create_table import extract_create_table_statements
-from create_table import create_linenums
+import create_table
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -17,9 +16,8 @@ def main():
 
     logging.info(f"Starting to process {input_file}")
 
-    line_numbers = create_linenums(input_file)
-    out = extract_create_table_statements(input_file, line_numbers)
-    print(out)
+    create_table.update(input_file)
+
     logging.info("Processing complete")
 
 
