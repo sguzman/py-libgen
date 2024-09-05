@@ -10,6 +10,7 @@ logging.basicConfig(
 
 
 def extract_column_names(create_statement):
+    logging.info("Extracting column names from CREATE TABLE statement")
     columns = re.findall(r"`(\w+)`", create_statement)
     # Remove the first match (table name) and remove duplicates while preserving order
     unique_columns = []
@@ -18,10 +19,12 @@ def extract_column_names(create_statement):
         if col not in seen:
             seen.add(col)
             unique_columns.append(col)
+    logging.info(f"Extracted columns: {unique_columns}")
     return unique_columns
 
 
 def process_create_statements(input_file):
+    logging.info(f"Processing CREATE TABLE statements from {input_file}")
     tables_file = "tables.sql"
     table_columns = {}
 
@@ -30,12 +33,14 @@ def process_create_statements(input_file):
         create_table_statements = re.findall(
             r"CREATE TABLE.*?;", content, re.DOTALL | re.IGNORECASE
         )
+        logging.info(f"Found {len(create_table_statements)} CREATE TABLE statements")
 
         for statement in create_table_statements:
             tf.write(statement + "\n\n")
             table_name = re.search(
                 r"CREATE TABLE `?(\w+)`?", statement, re.IGNORECASE
             ).group(1)
+            logging.info(f"Processing table: {table_name}")
             columns = extract_column_names(statement)
             table_columns[table_name] = columns
 
@@ -51,6 +56,7 @@ def process_create_statements(input_file):
 
 
 def parse_insert_values(string: str) -> list[list[any]]:
+    logging.info("Parsing INSERT statement values")
     # Get prefix before VALUES
     prefix = string[: string.index("VALUES")]
     # Extract the values part of the INSERT statement
@@ -73,21 +79,25 @@ def parse_insert_values(string: str) -> list[list[any]]:
             parsed_rows.append(data)
         except Exception as e:
             logging.debug(f"Error parsing INSERT statement: {e}")
+    logging.info(f"Parsed {len(parsed_rows)} rows from INSERT statement")
     return parsed_rows
 
 
 def process_insert_statements(input_file, table_columns):
+    logging.info(f"Processing INSERT statements from {input_file}")
     with open(input_file, "r") as f:
         # Read the entire file, split by newlines and filter out lines that don't start with INSERT
         insert_statements = [
             line for line in f.read().splitlines() if line.startswith("INSERT INTO")
         ]
+        logging.info(f"Found {len(insert_statements)} INSERT statements")
 
         for statement in insert_statements:
             try:
                 table_name = (
                     statement[: statement.index("VALUES")].split()[2].replace("`", "")
                 )
+                logging.info(f"Processing INSERT for table: {table_name}")
                 if table_name not in table_columns:
                     logging.warning(f"Skipping INSERT for unknown table: {table_name}")
                     continue
