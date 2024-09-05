@@ -1,7 +1,9 @@
-import sys
 import re
 import csv
 import logging
+import os
+
+from sqlglot import exp, parse_one
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -38,42 +40,64 @@ def process_create_statements(input_file):
     logging.info(f"Added {len(create_table_statements)} CREATE TABLE statement(s) to {tables_file}")
     return table_columns
 
+def parse_insert_values(string: str) -> list[list[any]]:
+    # Get prefix before VALUES
+    prefix = string[:string.index('VALUES')]
+    # Extract the values part of the INSERT statement
+    raw_values = string[string.index('VALUES') + 6:].split('),(')
+
+    # Clean leading and trailing parentheses
+    parsed_rows = []
+    for value in raw_values:
+        try:
+            single = prefix.replace('`', '') + ' VALUES ' + '(' + value.replace('(', '') +');'
+            stmt = parse_one(single)
+            data = [x.this for x in stmt.find(exp.Values).find_all(exp.Literal)]
+            data = [None if x == '' else x for x in data]
+            parsed_rows.append(data)
+        except Exception as e:
+            logging.warn(f"Error parsing INSERT statement: {e}")
+    return parsed_rows
+
+
 def process_insert_statements(input_file, table_columns):
     with open(input_file, 'r') as f:
-        content = f.read()
-        insert_statements = re.findall(r'(INSERT INTO.*?VALUES\s*(\(.*?\)(,\s*\(.*?\))*));', content, re.DOTALL | re.IGNORECASE)
+        # Read the entire file, split by newlines and filter out lines that don't start with INSERT
+        insert_statements = [line for line in f.read().splitlines() if line.startswith('INSERT INTO')]
         
-        for match in insert_statements:
-            full_statement = match[0]  # The full INSERT statement is always the first element
-            
-            match = re.search(r'INSERT INTO `?(\w+)`?', full_statement, re.IGNORECASE)
-            if not match:
-                logging.warning(f"Could not extract table name from INSERT statement: {full_statement[:100]}...")
-                continue
-            
-            table_name = match.group(1)
-            if table_name not in table_columns:
-                logging.warning(f"Skipping INSERT for unknown table: {table_name}")
-                continue
-            
-            values = re.findall(r'\((.*?)\)', full_statement)
-            csv_file = f"{table_name}.csv"
-            
-            with open(csv_file, 'a', newline='') as csvf:
-                writer = csv.writer(csvf)
-                for value_set in values:
-                    row = re.findall(r'\'(?:[^\'\\]|\\.)*\'|[^,]+', value_set)
-                    row = [v.strip().strip("'") for v in row]
-                    
-                    if len(row) != len(table_columns[table_name]):
-                        logging.warning(f"Mismatch in column count for table {table_name}. Expected {len(table_columns[table_name])}, got {len(row)}")
-                        continue
-                    
-                    writer.writerow(row)
-        
+        for statement in insert_statements:
+            try:
+                table_name = statement[:statement.index('VALUES')].split()[2].replace('`','')
+                if table_name not in table_columns:
+                    logging.warning(f"Skipping INSERT for unknown table: {table_name}")
+                    continue
+
+                csv_file = f"{table_name}.csv"
+                with open(csv_file, 'a', newline='') as csvf:
+                    writer = csv.writer(csvf)
+                    rows = parse_insert_values(statement)
+                    for row in rows:
+                        logging.info(f"Writing row to {csv_file}: {row}")
+                        writer.writerow(row)
+
+            except Exception as e:
+                logging.error(f"Error processing INSERT statement: {e}")
+                logging.error(f"Problematic statement: {statement[:100]}...")
+
         logging.info(f"Processed {len(insert_statements)} INSERT statement(s)")
 
-def main(input_file):
+def main():
+    # Define the path to data.sql in the resources folder
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    resources_dir = os.path.join(os.path.dirname(script_dir), 'resources')
+    input_file = os.path.join(resources_dir, 'data.sql')
+
+    if not os.path.exists(input_file):
+        logging.error(f"Input file not found: {input_file}")
+        return
+
+    logging.info(f"Starting to process {input_file}")
+
     # First pass: Process CREATE TABLE statements
     table_columns = process_create_statements(input_file)
     
@@ -83,10 +107,4 @@ def main(input_file):
     logging.info("Processing complete")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        print("Usage: python script.py <input_sql_file>")
-        sys.exit(1)
-
-    input_file = sys.argv[1]
-    logging.info(f"Starting to process {input_file}")
-    main(input_file)
+    main()

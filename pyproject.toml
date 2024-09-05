@@ -5,7 +5,9 @@ description = "Add your description here"
 authors = [
     { name = "Salvador Guzman", email = "guzmansalv@gmail.com" }
 ]
-dependencies = []
+dependencies = [
+    "sqlglot[rs]>=25.19.0",
+]
 readme = "README.md"
 requires-python = ">= 3.8"
 
