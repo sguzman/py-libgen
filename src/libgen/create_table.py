@@ -193,23 +193,41 @@ def get_tables(input_file: str) -> List[str]:
     return table_names
 
 
+@cache_result
+def scripts(input_file: str) -> List[str]:
+    """
+    Get the create table statements from the input file.
+    """
+    logging.info(f"Getting create table statements from {input_file}")
+    line_numbers = create_linenums(input_file)
+    create_table_statements = extract_create_table_statements(input_file, line_numbers)
+    return create_table_statements
+
+
+@cache_result
+def script_format(create_table_statements: List[str]) -> str:
+    """
+    Format create table statements for writing to a file.
+    """
+    logging.info("Formatting create table statements")
+    formatted_statements = []
+    for stmt in create_table_statements:
+        for line in stmt:
+            formatted_statements.append(line)
+        formatted_statements.append("\n")
+
+    return "\n".join(formatted_statements)
+
+
 def update(input_file: str):
     """
     Write create table statements to a table.sql file.
     """
     logging.info(f"Updating {SQL_FILE}")
-
-    line_numbers: List[int] = create_linenums(input_file)
-    create_table_statements: List[str] = extract_create_table_statements(
-        input_file, line_numbers
-    )
+    create_table_statements: List[str] = scripts(input_file)
     tables = open(SQL_FILE, "w")
 
-    for stmt in create_table_statements:
-        for line in stmt:
-            tables.write(line)
-            tables.write("\n")
-        tables.write("\n")
+    tables.write(script_format(create_table_statements))
 
     tables.close()
 

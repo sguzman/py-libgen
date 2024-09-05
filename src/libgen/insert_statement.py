@@ -5,6 +5,7 @@ import logging
 from typing import List, Any, Callable
 from functools import wraps
 import util
+import create_table
 
 CACHE_DIR = ".cache/insert_statement"
 
@@ -56,6 +57,46 @@ def cache_result(func: Callable):
 
 
 @cache_result
+def get_table_columns(input_file: str, table_name: str) -> List[str]:
+    """
+    Extract the column names for a given table from the CREATE TABLE statement in the input file.
+
+    Args:
+    input_file: The path to the input file
+    table_name: The name of the table to find columns for
+
+    Returns:
+    A list of column names for the specified table
+    """
+    logging.info(f"Extracting columns for table '{table_name}' from {input_file}")
+
+    create_table_lines = util.prefix_filter(input_file, f"CREATE TABLE `{table_name}`")
+
+    if not create_table_lines:
+        logging.warning(f"CREATE TABLE statement not found for table '{table_name}'")
+        return []
+
+    start_line = create_table_lines[0]
+    end_line = create_table.find_sql_termination(input_file, start_line)
+
+    create_table_statement = create_table.read_lines_range(
+        input_file, start_line, end_line
+    )
+
+    columns = []
+    for line in create_table_statement[1:]:  # Skip the first line (CREATE TABLE)
+        line = line.strip()
+        if line.startswith("`"):
+            column_name = line.split("`")[1]
+            columns.append(column_name)
+        elif line.startswith(")"):  # End of column definitions
+            break
+
+    logging.info(f"Extracted {len(columns)} columns for table '{table_name}'")
+    return columns
+
+
+@cache_result
 def find_insert_statements(input_file: str, table_name: str) -> List[str]:
     """
     Find all INSERT statements for a specific table in the input file.
@@ -69,8 +110,7 @@ def find_insert_statements(input_file: str, table_name: str) -> List[str]:
     """
     logging.info(f"Finding INSERT statements for table '{table_name}' in {input_file}")
 
-    insert_statements = []
-    util.prefix_filter(input_file, f"INSERT INTO `{table_name}`")
+    insert_statements = util.prefix_filter(input_file, f"INSERT INTO `{table_name}`")
 
     logging.info(
         f"Found {len(insert_statements)} INSERT statements for table '{table_name}'"
