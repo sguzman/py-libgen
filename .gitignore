@@ -16,3 +16,4 @@ resources/
 *.rar
 cache/
 .cache/
+ruff_cache/

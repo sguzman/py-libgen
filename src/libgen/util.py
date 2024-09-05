@@ -6,7 +6,7 @@ import csv
 from typing import List, Any, Callable
 from functools import wraps
 
-CACHE_DIR = "cache"
+CACHE_DIR = ".cache"
 
 
 def ensure_cache_dir(func_name: str) -> bytes:

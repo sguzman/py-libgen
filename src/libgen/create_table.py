@@ -38,24 +38,95 @@ def process_create_statement(statement: str) -> Dict[str, List[str]]:
     return {table_name: columns}
 
 
+def skip_lines(input_file: str, n: int):
+    """
+    Skip n lines of a file buffer that is read line by line.
+
+    Args:
+    file: A file object
+    n: Number of lines to skip
+
+    Returns:
+    The file object after skipping n lines
+    """
+    file = open(input_file, "r")
+    for _ in range(n):
+        next(file, None)
+    return file
+
+
+@cache_result
+def read_lines_range(input_file: str, start: int, end: int) -> List[str]:
+    """
+    Read lines from a file within a specified range.
+
+    Args:
+    input_file: The path to the input file
+    start: The starting line number (inclusive)
+    end: The ending line number (inclusive)
+
+    Returns:
+    A list of strings containing the lines within the specified range
+    """
+    logging.info(f"Reading lines {start} to {end} from {input_file}")
+
+    lines = []
+    with open(input_file, "r") as file:
+        # Skip to the start line
+        file = skip_lines(input_file, start - 1)
+        diff = end - start
+
+        # Read lines within the range
+        for _ in range(diff):
+            line = file.readline()
+            if not line:  # End of file
+                break
+            lines.append(line.rstrip("\n"))
+
+    logging.info(f"Read {len(lines)} lines")
+    return lines
+
+
+@cache_result
+def find_sql_termination(input_file: str, start_offset: int) -> int:
+    """
+    Find the line number that terminates the SQL expression starting from a given offset.
+
+    Args:
+    input_file: The path to the input file
+    start_offset: The line number to start searching from
+
+    Returns:
+    The line number of the first line ending with a semicolon after the start_offset
+    """
+    logging.info(f"Finding SQL termination from line {start_offset} in {input_file}")
+
+    with open(input_file, "r") as file:
+        # Skip to the start offset
+        for _ in range(start_offset - 1):
+            next(file, None)
+
+        # Search for the terminating line
+        for line_number, line in enumerate(file, start=start_offset):
+            if line.strip().endswith(";"):
+                logging.info(f"Found SQL termination at line {line_number}")
+                return line_number
+
+    logging.warning("No SQL termination found")
+    return -1  # Return -1 if no termination is found
+
+
 @cache_result
 def extract_create_table_statements(
     input_file: str, line_numbers: List[int]
 ) -> List[str]:
     logging.info(f"Extracting CREATE TABLE statements from {input_file}")
-    with open(input_file, "r") as file:
-        content = file.readlines()
 
     create_table_statements = []
     for line_number in line_numbers:
-        statement = []
-        i = line_number
-        while i < len(content) and not content[i].strip().endswith(";"):
-            statement.append(content[i])
-            i += 1
-        if i < len(content):
-            statement.append(content[i])  # Include the last line with semicolon
-        create_table_statements.append("".join(statement))
+        term = find_sql_termination(input_file, line_number)
+        stmt = read_lines_range(input_file, line_number, term)
+        create_table_statements.append(stmt)
 
     logging.info(f"Extracted {len(create_table_statements)} CREATE TABLE statements")
     return create_table_statements

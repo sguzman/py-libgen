@@ -7,8 +7,6 @@ logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-CACHE_DIR = "cache"
-
 
 def main():
     input_file = "./resources/data.sql"
