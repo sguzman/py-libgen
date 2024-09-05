@@ -1,8 +1,10 @@
 import re
 import logging
 from util import cache_result, create_csv_with_headers
-from typing import List, Dict, Optional
+from typing import List, Dict
 from util import prefix_filter
+
+SQL_FILE = "./tables.sql"
 
 
 @cache_result
@@ -141,17 +143,67 @@ def create_linenums(input_file: str) -> List[int]:
     return statements
 
 
-def update(input_file: str) -> Optional[str]:
+@cache_result
+def extract_table_names(create_table_statements: List[str]) -> List[str]:
+    """
+    Extract table names from CREATE TABLE statements.
+
+    Args:
+    create_table_statements: A list of CREATE TABLE SQL statements
+
+    Returns:
+    A list of table names extracted from the statements
+    """
+    logging.info("Extracting table names from CREATE TABLE statements")
+    table_names = []
+    for statement in create_table_statements:
+        # Split the statement and find the table name
+        # It's typically the third word in a CREATE TABLE statement
+        words = statement[0].split()
+        if (
+            len(words) >= 3
+            and words[0].upper() == "CREATE"
+            and words[1].upper() == "TABLE"
+        ):
+            # Remove any backticks or quotes from the table name
+            table_name = words[2].strip('`"')
+            table_names.append(table_name)
+
+    logging.info(f"Extracted {len(table_names)} table names")
+    return table_names
+
+
+@cache_result
+def get_tables(input_file: str) -> List[str]:
+    """
+    Get all table names from CREATE TABLE statements in the input file.
+
+    Args:
+    input_file: The path to the input file
+
+    Returns:
+    A list of table names
+    """
+    logging.info(f"Getting tables from {input_file}")
+    line_numbers = create_linenums(input_file)
+    create_table_statements = extract_create_table_statements(input_file, line_numbers)
+    table_names = extract_table_names(create_table_statements)
+
+    logging.info(f"Found {len(table_names)} tables")
+    return table_names
+
+
+def update(input_file: str):
     """
     Write create table statements to a table.sql file.
     """
-    logging.info(f"Updating {input_file}")
+    logging.info(f"Updating {SQL_FILE}")
 
     line_numbers: List[int] = create_linenums(input_file)
     create_table_statements: List[str] = extract_create_table_statements(
         input_file, line_numbers
     )
-    tables = open("./tables.sql", "w")
+    tables = open(SQL_FILE, "w")
 
     for stmt in create_table_statements:
         for line in stmt:
@@ -161,4 +213,4 @@ def update(input_file: str) -> Optional[str]:
 
     tables.close()
 
-    logging.info(f"Updated {input_file}")
+    logging.info(f"Updated {SQL_FILE}")

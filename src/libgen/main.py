@@ -17,6 +17,8 @@ def main():
     logging.info(f"Starting to process {input_file}")
 
     create_table.update(input_file)
+    tables = create_table.get_tables(input_file)
+    logging.info(f"Found {tables} tables")
 
     logging.info("Processing complete")
 
