@@ -7,7 +7,6 @@ from functools import wraps
 import util
 import create_table
 import sqlglot
-import multiprocessing
 
 CACHE_DIR = ".cache/insert_statement"
 
@@ -43,8 +42,6 @@ def cache_result(func: Callable):
             f.close()
             p = pickle.loads(content)
             return p
-        else:
-            logging.info(f"Cache miss for {func.__name__}")
 
         result = func(*args)
 
@@ -78,6 +75,7 @@ def get_nth_line(input_file: str, n: int) -> str:
 
     return line
 
+@cache_result
 def row(input_file: str, row_id: int) -> List[Any]:
     """
     Get a single row from the input file based on the row ID.
@@ -131,16 +129,12 @@ def rows(input_file: str, ids: List[int]) -> List[List[Any]]:
     Returns:
     A list of rows, where each row is a list of values
     """
-    from multiprocessing import Pool
     logging.info(f"Extracting rows with IDs {len(ids)} from {input_file}")
 
     rs = []
-
-    num_cores = multiprocessing.cpu_count()
-    pool = Pool(processes=num_cores)
-    args = [input_file] * len(ids)
-    z = zip(args, ids)
-    rs = pool.map(row_wrapper, z)
+    for i in ids:
+        r = row(input_file, i)
+        rs.append(r)
 
     logging.info(f"Extracted {len(rs)} good rows from {len(ids)}")
     return rs
