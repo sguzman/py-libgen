@@ -7,6 +7,7 @@ from functools import wraps
 import util
 import create_table
 import sqlglot
+import multiprocessing
 
 CACHE_DIR = ".cache/insert_statement"
 
@@ -129,12 +130,16 @@ def rows(input_file: str, ids: List[int]) -> List[List[Any]]:
     Returns:
     A list of rows, where each row is a list of values
     """
+    from multiprocessing import Pool
     logging.info(f"Extracting rows with IDs {len(ids)} from {input_file}")
 
     rs = []
-    for i in ids:
-        r = row(input_file, i)
-        rs.append(r)
+
+    num_cores = multiprocessing.cpu_count()
+    pool = Pool(processes=num_cores)
+    args = [input_file] * len(ids)
+    z = zip(args, ids)
+    rs = pool.map(row_wrapper, z)
 
     logging.info(f"Extracted {len(rs)} good rows from {len(ids)}")
     return rs
