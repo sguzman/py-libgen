@@ -7,6 +7,8 @@ from functools import wraps
 import util
 import create_table
 import sqlglot
+import multiprocessing
+
 CACHE_DIR = ".cache/insert_statement"
 
 
@@ -49,7 +51,6 @@ def cache_result(func: Callable):
         f = open(cache_file, "wb")
         pickle.dump(result, f)
         f.close()
-        logging.info(f"Cached result for {func.__name__}")
 
         return result
 
@@ -77,7 +78,6 @@ def get_nth_line(input_file: str, n: int) -> str:
 
     return line
 
-@cache_result
 def row(input_file: str, row_id: int) -> List[Any]:
     """
     Get a single row from the input file based on the row ID.
@@ -113,8 +113,11 @@ def row(input_file: str, row_id: int) -> List[Any]:
 
             data.append(d)
         except Exception as e:
-            logging.warning(f"Error parsing {stmt}: {e}")
+            logging.debug(f"Error parsing {stmt}: {e}")
     return data
+
+def row_wrapper(args):
+    return row(*args)
 
 @cache_result
 def rows(input_file: str, ids: List[int]) -> List[List[Any]]:
@@ -128,9 +131,19 @@ def rows(input_file: str, ids: List[int]) -> List[List[Any]]:
     Returns:
     A list of rows, where each row is a list of values
     """
+    from multiprocessing import Pool
     logging.info(f"Extracting rows with IDs {len(ids)} from {input_file}")
 
-    return [row(input_file, row_id) for row_id in ids]
+    rs = []
+
+    num_cores = multiprocessing.cpu_count()
+    pool = Pool(processes=num_cores)
+    args = [input_file] * len(ids)
+    z = zip(args, ids)
+    rs = pool.map(row_wrapper, z)
+
+    logging.info(f"Extracted {len(rs)} good rows from {len(ids)}")
+    return rs
 
 @cache_result
 def columns_from_str(ss: str) -> List[str]:
