@@ -113,7 +113,7 @@ def row(input_file: str, row_id: int, column_size: int) -> List[Any]:
             if len(d) == column_size:
                 data.append(d)
             else:
-                logging.info(f"Rejected row {row_id} [{len(d)} columns]")
+                logging.info(f"Rejected row {row_id} [{len(d)} columns != {column_size}")
         except Exception as e:
             logging.debug(f"Error parsing {stmt}: {e}")
     return data
@@ -182,7 +182,7 @@ def get_table_columns(input_file: str, table_name: str) -> List[str]:
     ss = create_table.script_from_table(input_file, table_name)
     columns = columns_from_str(ss)
     logging.info(f"{table_name}: {columns}")
-    return columns[1:]
+    return columns
 
 
 @cache_result
