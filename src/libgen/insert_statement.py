@@ -216,7 +216,8 @@ def update(input_file: str, table_name: str):
     row_ids = find_insert_statements(input_file, table_name)
     headers = get_table_columns(input_file, table_name)
     rs = rows(input_file, row_ids)
+    truncate_headers = headers[:len(rs[0])]
     
     logging.info(f"{table_name}: {len(rs)} rows")
-    write_csv(table_name, headers, rs)
+    write_csv(table_name, truncate_headers, rs)
 
