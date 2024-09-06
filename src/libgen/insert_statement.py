@@ -219,6 +219,7 @@ def update(input_file: str, table_name: str):
     """
     row_ids = find_insert_statements(input_file, table_name)
     headers = get_table_columns(input_file, table_name)
+    column_size = len(headers)
     rs = rows(input_file, row_ids, column_size)
     
     logging.info(f"{table_name}: {len(rs)} rows")
