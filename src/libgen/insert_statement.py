@@ -6,7 +6,7 @@ from typing import List, Any, Callable
 from functools import wraps
 import util
 import create_table
-
+import sqlglot
 CACHE_DIR = ".cache/insert_statement"
 
 
@@ -55,6 +55,82 @@ def cache_result(func: Callable):
 
     return wrapper
 
+@cache_result
+def get_nth_line(input_file: str, n: int) -> str:
+    """
+    Get the nth line from the input file.
+
+    Args:
+    input_file: The path to the input file
+    n: The line number to retrieve (1-based index)
+
+    Returns:
+    The content of the nth line as a string
+    """
+    logging.info(f"Getting line {n} from {input_file}")
+
+    # Skip n-1 lines to get to the desired line
+    file = util.skip_lines(input_file, n - 1)
+
+    # Read the nth line
+    line = file.readline().strip()
+
+    return line
+
+@cache_result
+def row(input_file: str, row_id: int) -> List[Any]:
+    """
+    Get a single row from the input file based on the row ID.
+
+    Args:
+    input_file: The path to the input file
+    row_id: The ID of the row to retrieve
+
+    Returns:
+    A list containing the values of the specified row
+    """
+    logging.debug(f"Getting row with ID {row_id} from {input_file}")
+
+    line: str = get_nth_line(input_file, row_id)
+    prefix_idx = line.index("VALUES") + len("VALUES")
+    prefix_str = line[:prefix_idx].strip()
+    data_str = line[prefix_idx:].strip()
+    vs = data_str.split("),(")
+
+    prefix_str = prefix_str.replace("`", "")
+    data = []
+    for v in vs:
+        v = v.strip("(); ")
+        stmt: str = f'{prefix_str} ({v});'
+        try:
+            s = sqlglot.parse_one(stmt)
+            d = []
+            for a in s.find(sqlglot.exp.Values).find_all(sqlglot.exp.Literal):
+                if a.this == '':
+                    d.append(None)
+                else:
+                    d.append(a.this)
+
+            data.append(d)
+        except Exception as e:
+            logging.warning(f"Error parsing {stmt}: {e}")
+    return data
+
+@cache_result
+def rows(input_file: str, ids: List[int]) -> List[List[Any]]:
+    """
+    Extract rows from the input file for the given list of row IDs.
+
+    Args:
+    input_file: The path to the input file
+    ids: A list of row IDs to extract
+
+    Returns:
+    A list of rows, where each row is a list of values
+    """
+    logging.info(f"Extracting rows with IDs {len(ids)} from {input_file}")
+
+    return [row(input_file, row_id) for row_id in ids]
 
 @cache_result
 def columns_from_str(ss: str) -> List[str]:
@@ -86,7 +162,7 @@ def get_table_columns(input_file: str, table_name: str) -> List[str]:
     ss = create_table.script_from_table(input_file, table_name)
     columns = columns_from_str(ss)
     logging.info(f"{table_name}: {columns}")
-    return columns
+    return columns[1:]
 
 
 @cache_result
@@ -115,5 +191,9 @@ def update(input_file: str, table_name: str):
     """
     Update the insert statements for a specific table in the input file.
     """
-    _insert_statements = find_insert_statements(input_file, table_name)
+    row_ids = find_insert_statements(input_file, table_name)
     _columns = get_table_columns(input_file, table_name)
+    rs = rows(input_file, row_ids)
+    
+    logging.info(f"{table_name}: {len(rs)} rows")
+
