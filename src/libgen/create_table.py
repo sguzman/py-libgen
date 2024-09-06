@@ -1,4 +1,5 @@
 import logging
+import itertools
 from typing import List, Any, Callable
 from functools import wraps
 import util
@@ -230,7 +231,7 @@ def scripts_ss(create_table_statements: List[List[str]]) -> List[str]:
     logging.info("Formatting create table statements")
     formatted_statements = []
     for stmt in create_table_statements:
-        formatted_statements.append("".join(stmt))
+        formatted_statements.append("\n".join(stmt))
 
     return formatted_statements
 
@@ -250,10 +251,11 @@ def update(input_file: str):
     Write create table statements to a table.sql file.
     """
     logging.info(f"Updating {SQL_FILE}")
-    create_table_statements: List[List[str]] = scripts(input_file)
+    cs: List[List[str]] = scripts(input_file)
     tables = open(SQL_FILE, "w")
 
-    tables.write(scripts_format(create_table_statements))
+    ss = "\n".join(list(itertools.chain(*cs)))
+    tables.write(ss)
 
     tables.close()
 
