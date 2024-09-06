@@ -88,7 +88,7 @@ def row(input_file: str, row_id: int, column_size: int) -> List[Any]:
     Returns:
     A list containing the values of the specified row
     """
-    logging.debug(f"Getting row with ID {row_id} from {input_file}")
+    logging.debug(f"Getting row with ID {row_id} from {input_file} with column size {column_size}")
 
     line: str = get_nth_line(input_file, row_id)
     prefix_idx = line.index("VALUES") + len("VALUES")
@@ -112,6 +112,8 @@ def row(input_file: str, row_id: int, column_size: int) -> List[Any]:
 
             if len(d) == column_size:
                 data.append(d)
+            else:
+                logging.info(f"Rejected row {row_id} [{len(d)} columns]")
         except Exception as e:
             logging.debug(f"Error parsing {stmt}: {e}")
     return data
