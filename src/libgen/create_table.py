@@ -80,7 +80,7 @@ def read_lines_range(input_file: str, start: int, end: int) -> List[str]:
 
         # Read lines within the range
         for _ in range(diff):
-            line = file.readline()
+            line = util.get_line(file)
             if not line:  # End of file
                 break
             lines.append(line.rstrip("\n"))
@@ -106,7 +106,7 @@ def find_sql_termination(input_file: str, start_offset: int) -> int:
     with open(input_file, "r") as file:
         # Skip to the start offset
         for _ in range(start_offset - 1):
-            next(file, None)
+            _ = util.get_line(file)
 
         # Search for the terminating line
         for line_number, line in enumerate(file, start=start_offset):

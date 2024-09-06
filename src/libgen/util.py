@@ -3,7 +3,7 @@ import hashlib
 import pickle
 import logging
 import csv
-from typing import List, Any, Callable
+from typing import List, Any, Callable, Optional, TextIO
 from functools import wraps
 
 CACHE_DIR = ".cache/util"
@@ -74,6 +74,14 @@ def create_csv_with_headers(file_path: str, headers: List[str]) -> None:
         csv.writer(csvf).writerow(headers)
 
 
+def get_line(file: TextIO) -> Optional[str]:
+    try:
+        return file.readline()
+    except Exception as e:
+        logging.debug(f"Error reading line: {e}")
+        return None
+
+
 @cache_result
 def prefix_filter(input_file: str, prefix: str) -> List[int]:
     line_numbers = []
@@ -81,12 +89,13 @@ def prefix_filter(input_file: str, prefix: str) -> List[int]:
 
     line_number = 1
     while True:
-        line = file.readline()
+        line = get_line(file)
         if not line:  # End of file
             break
         if line.startswith(prefix):
             logging.debug(f"Found {prefix} at line {line_number}")
             line_numbers.append(line_number)
+
         line_number += 1
 
     file.close()
