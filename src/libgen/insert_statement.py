@@ -7,8 +7,8 @@ from functools import wraps
 import util
 import create_table
 import sqlglot
+import csv
 import multiprocessing
-
 CACHE_DIR = ".cache/insert_statement"
 
 
@@ -141,8 +141,10 @@ def rows(input_file: str, ids: List[int]) -> List[List[Any]]:
     z = zip(args, ids)
     rs = pool.map(row_wrapper, z)
 
-    logging.info(f"Extracted {len(rs)} good rows from {len(ids)}")
-    return rs
+    flat = [item for sublist in rs for item in sublist]
+
+    logging.info(f"Extracted {len(flat)} lines")
+    return flat
 
 @cache_result
 def columns_from_str(ss: str) -> List[str]:
@@ -198,14 +200,23 @@ def find_insert_statements(input_file: str, table_name: str) -> List[str]:
     )
     return insert_statements
 
+def write_csv(name: str, headers: List[str], rows: List[List[Any]]):
+    full_name = f"{name}.csv"
+    logging.info(f"Writing {len(rows)} rows to {full_name}")
+    with open(full_name, "w") as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        for row in rows:
+            writer.writerow(row)
 
 def update(input_file: str, table_name: str):
     """
     Update the insert statements for a specific table in the input file.
     """
     row_ids = find_insert_statements(input_file, table_name)
-    _columns = get_table_columns(input_file, table_name)
+    headers = get_table_columns(input_file, table_name)
     rs = rows(input_file, row_ids)
     
     logging.info(f"{table_name}: {len(rs)} rows")
+    write_csv(table_name, headers, rs)
 
