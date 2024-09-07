@@ -54,7 +54,8 @@ def cache_result(func: Callable):
 
     return wrapper
 
-
+ensure_cache_dir("get_nth_line")
+@cache_result
 def get_nth_line(input_file: str, n: int) -> str:
     """
     Get the nth line from the input file.
@@ -76,6 +77,7 @@ def get_nth_line(input_file: str, n: int) -> str:
 
     return line
 
+ensure_cache_dir("row")
 @cache_result
 def row(input_file: str, row_id: int, column_size: int) -> List[Any]:
     """
@@ -118,9 +120,11 @@ def row(input_file: str, row_id: int, column_size: int) -> List[Any]:
             logging.debug(f"Error parsing {stmt}: {e}")
     return data
 
+
 def row_wrapper(args):
     return row(*args)
 
+ensure_cache_dir("rows")
 @cache_result
 def rows(input_file: str, ids: List[int], column_size: int) -> List[List[Any]]:
     """
@@ -150,6 +154,7 @@ def rows(input_file: str, ids: List[int], column_size: int) -> List[List[Any]]:
     logging.info(f"Extracted {len(flat)} lines")
     return flat
 
+ensure_cache_dir("columns_from_str")
 @cache_result
 def columns_from_str(ss: str) -> List[str]:
     columns = []
@@ -164,7 +169,7 @@ def columns_from_str(ss: str) -> List[str]:
             columns.append(token[1:-1])
     return columns
 
-
+ensure_cache_dir("get_table_columns")
 @cache_result
 def get_table_columns(input_file: str, table_name: str) -> List[str]:
     """
@@ -184,7 +189,7 @@ def get_table_columns(input_file: str, table_name: str) -> List[str]:
     logging.info(f"{table_name}: {columns}")
     return columns
 
-
+ensure_cache_dir("find_insert_statements")
 @cache_result
 def find_insert_statements(input_file: str, table_name: str) -> List[str]:
     """

@@ -81,7 +81,7 @@ def get_line(file: TextIO) -> Optional[str]:
         logging.debug(f"Error reading line: {e}")
         return None
 
-
+ensure_cache_dir("prefix_filter")
 @cache_result
 def prefix_filter(input_file: str, prefix: str) -> List[int]:
     line_numbers = []

@@ -58,6 +58,7 @@ def cache_result(func: Callable):
     return wrapper
 
 
+ensure_cache_dir("read_lines_range")
 @cache_result
 def read_lines_range(input_file: str, start: int, end: int) -> List[str]:
     """
@@ -89,7 +90,7 @@ def read_lines_range(input_file: str, start: int, end: int) -> List[str]:
     logging.info(f"Read {len(lines)} lines")
     return lines
 
-
+ensure_cache_dir("find_sql_termination")
 @cache_result
 def find_sql_termination(input_file: str, start_offset: int) -> int:
     """
@@ -118,7 +119,7 @@ def find_sql_termination(input_file: str, start_offset: int) -> int:
     logging.warning("No SQL termination found")
     return -1  # Return -1 if no termination is found
 
-
+ensure_cache_dir("extract_create_table_statements")
 @cache_result
 def extract_create_table_statements(
     input_file: str, line_numbers: List[int]
@@ -134,7 +135,7 @@ def extract_create_table_statements(
     logging.info(f"Extracted {len(create_table_statements)} CREATE TABLE statements")
     return create_table_statements
 
-
+ensure_cache_dir("script_from_table")
 @cache_result
 def script_from_table(input_file: str, table_name: str) -> List[str]:
     """
@@ -150,7 +151,7 @@ def script_from_table(input_file: str, table_name: str) -> List[str]:
         if s.startswith(f"CREATE TABLE `{table_name}`"):
             return s
 
-
+ensure_cache_dir("create_linenums")
 @cache_result
 def create_linenums(input_file: str) -> List[int]:
     logging.info("Finding CREATE TABLE statements")
@@ -159,7 +160,7 @@ def create_linenums(input_file: str) -> List[int]:
     logging.info(f"Found {len(statements)} CREATE TABLE statements")
     return statements
 
-
+ensure_cache_dir("extract_table_names")
 @cache_result
 def extract_table_names(create_table_statements: List[str]) -> List[str]:
     """
@@ -189,7 +190,7 @@ def extract_table_names(create_table_statements: List[str]) -> List[str]:
     logging.info(f"Extracted {len(table_names)} table names")
     return table_names
 
-
+ensure_cache_dir("get_tables")
 @cache_result
 def get_tables(input_file: str) -> List[str]:
     """
@@ -209,7 +210,7 @@ def get_tables(input_file: str) -> List[str]:
     logging.info(f"Found {len(table_names)} tables")
     return table_names
 
-
+ensure_cache_dir("scripts")
 @cache_result
 def scripts(input_file: str) -> List[List[str]]:
     """
@@ -222,7 +223,7 @@ def scripts(input_file: str) -> List[List[str]]:
     )
     return create_table_statements
 
-
+ensure_cache_dir("scripts_ss")
 @cache_result
 def scripts_ss(create_table_statements: List[List[str]]) -> List[str]:
     """
@@ -235,7 +236,7 @@ def scripts_ss(create_table_statements: List[List[str]]) -> List[str]:
 
     return formatted_statements
 
-
+ensure_cache_dir("scripts_format")
 @cache_result
 def scripts_format(create_table_statements: List[List[str]]) -> str:
     """
